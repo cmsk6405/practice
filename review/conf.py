@@ -1,7 +1,7 @@
 config = {
     "input": {
         "train": "../review/open/train.csv",
-        "test.csv": "../review/open/test.csv",
+        "test": "../review/open/test.csv",
     },
     "columns": {
         "use_trn_cols": ["ID", "사고일시", "요일", "기상상태", "시군구", "도로형태", "노면상태", "사고유형"],
