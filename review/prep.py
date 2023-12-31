@@ -1,9 +1,10 @@
 import pandas as pd
 import numpy as np
-from conf import config
+import copy
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 # from datasets import HomeData
-import copy
+
+from conf import config
 
 # @dataclass
 class HomeData():
@@ -15,7 +16,6 @@ class HomeData():
         self.train_csv = pd.read_csv(config["input"]["train"])
         self.test_csv = pd.read_csv(config["input"]["test"])
                 
-    
     def Preprocess(self):
         df_train = copy.deepcopy(self.train_csv)
         df_test = copy.deepcopy(self.test_csv)
@@ -26,25 +26,13 @@ class HomeData():
         if config["columns"]["drop_tst_flag"] is True:
             df_test.drop(columns=config["columns"]["drop_tst_cols"], axis=1, inplace=True)
             
-        df_train = HomeData().CustomPrep(df_train)
-        df_test = HomeData().CustomPrep(df_test)
-        print("here ok")
+        df_train = self.CustomPrep(df_train)
+        df_test = self.CustomPrep(df_test)
         
-        df_num = df_train.select_dtypes(include=["object"])
-        
-        df_cat = df_train.select_dtypes(include=["object"])
-        enc = OneHotEncoder(
-            dtype=np.float32,
-            sparse_output=False,
-            drop="if_binary",
-            handle_unknown="ignore",
-        )
-        enc.fit(df_cat)
-        df_cat_onehot = pd.DataFrame(
-            enc.transform(df_cat), columns=enc.get_feature_names_out()
-        ).reset_index(drop=True)
+        #트레인데이터만 인코딩함
+        prep_train = self.Encoding(df_train)
 
-        return pd.concat([df_num, df_cat_onehot], axis=1).set_index(df_train.index)
+        return prep_train
             
         
         
@@ -75,21 +63,55 @@ class HomeData():
             df['동'] = df['시군구'].str.split(' ').str[2]
             df.drop('시군구', axis=1, inplace=True)
             
+        if '시군구' in df.columns:
+            df['군'] = df['시군구'].str.split(' ').str[1]
+            df['동'] = df['시군구'].str.split(' ').str[2]
+            df.drop('시군구', axis=1, inplace=True)
+            
         return df
 
     def Encoding(self, df):
-        label_encoder = LabelEncoder()
-        encoded_data = label_encoder.fit_transform(df.columns)
         
-        onehot_encoder = OneHotEncoder(sparse=False, categories='auto')
-        onehot_encoded_data = onehot_encoder.fit_transform(encoded_data.reshape(-1, 1))
-        df_encoded = pd.DataFrame(onehot_encoded_data, columns=[f'category_{i}' for i in range(onehot_encoded_data.shape[1])])
+        idx = config["columns"]["index_col"]
+        tgt = config["columns"]["target_cols"]
+        df_idx = df[idx]
+        df_tgt = df[tgt]
+        df.drop(idx,axis=1, inplace= True)
+        df.drop(tgt,axis=1, inplace= True)
+        print('encoding cols: ',df.columns)
         
-        return df
-    
+        # df.drops("ID")
+        # Numeric
+        df_num = df.select_dtypes(include=["number"])
+        # if self.fill_num_strategy == "mean":
+        #     fill_values = df_num.mean(axis=1)
+        # elif self.fill_num_strategy == "min":
+        #     fill_values = df_num.min(axis=1)
+        # elif self.fill_num_strategy == "max":
+        #     fill_values = df_num.max(axis=1)
+        # df_num.fillna(fill_values, inplace=True)
+        # df_num.reset_index(drop=True, inplace=True)
+        # if self.x_scaler is not None:
+        #     df_num = pd.DataFrame(self._scale_X(df_num), columns=df_num.columns)
+
+        # Categorical
+        df_cat = df.select_dtypes(include=["object"])
+        enc = OneHotEncoder(
+            dtype=np.float32,
+            sparse_output=False,
+            drop="if_binary",
+            handle_unknown="ignore",
+        )
+        enc.fit(df_cat)
+        df_cat_onehot = pd.DataFrame(
+            enc.transform(df_cat), columns=enc.get_feature_names_out()).reset_index(drop=True)
+        return pd.concat([df_num, df_cat_onehot,df_tgt], axis=1).set_index(df_idx)
+        
 
 
-    
+if __name__ == "__main__":
 #실행용
-a = HomeData()
-a.Preprocess()
+    prep_class = HomeData()
+    processed_data = prep_class.Preprocess()
+    print(processed_data.columns)
+    processed_data.to_csv(config["output"]["prep_train"])
